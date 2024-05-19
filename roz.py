@@ -242,13 +242,14 @@ while idx < len(filename_list):
     edges = cv2.Canny(dilation, 100, 255)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     rect = []
+    copy_transformed_roi = transformed_roi.copy()
     for contour in contours:
         area = cv2.contourArea(contour)
         if area > 10000:
             #cv2.drawContours(transformed_roi, [contour], 0, (255), thickness=5)
             x,y,w,h = cv2.boundingRect(contour)
             if h >300:
-                #cv2.rectangle(transformed_roi,(x,y),(x+w,y+h),(0,255,0),8)
+                cv2.rectangle(copy_transformed_roi,(x,y),(x+w,y+h),(0,255,0),8)
                 rect.append([x,y,w,h])
 
     rect_sorted = sorted(rect, key=lambda r: r[0])
@@ -296,6 +297,7 @@ while idx < len(filename_list):
 
     # Wyświetl przekształcony obszar w nowym oknie
     #cv2.imshow('Transformed ROI', transformed_roi)
+    #cv2.imshow('Bounding boxes', copy_transformed_roi)
     #cv2.waitKey(0)  
     # cv2.imshow('result', scaled_roi)
     # cv2.waitKey(0)
