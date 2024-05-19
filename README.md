@@ -3,7 +3,7 @@
 In my project I wanted to recognize license plates using image processing methods without using ML or AI methods
 
 ## 📷 How does it work?
-Example photo of a car whose license plate we want to recognize. 
+Example photo of a car which license plate we want to recognize. 
 
 ![zdj](train_1/PGN141GR.jpg)
 
