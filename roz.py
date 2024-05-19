@@ -132,7 +132,7 @@ while idx < len(filename_list):
         if area > max_area:
             max_area = area
             max_contour = contour
-
+    
     #cv2.drawContours(scaled_roi, [max_contour], 0, (255,255,0), thickness=3)
     if max_contour is not None:
         epsilon = 0.02 * cv2.arcLength(max_contour, True)
