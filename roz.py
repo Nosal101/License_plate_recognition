@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import json 
 
 folder_path = 'train_1'
 shape_y = 2976 // 4
@@ -14,42 +15,47 @@ sorted_points_list=[]
 templates_path = "characters"
 templates = {}
 sift = cv2.SIFT_create()
-# Parametry algorytmu RANSAC
+orb = cv2.ORB_create()
 ransac_reproj_thresh = 5.0
-for filename in os.listdir(templates_path):
-    if filename.endswith(".png"):  # Załóżmy, że szablony mają rozszerzenie .png
-        letter = filename.split(".")[0]  # Przyjmujemy, że nazwa pliku to litera, którą reprezentuje
-        template = cv2.imread(os.path.join(templates_path, filename))
-        template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-        template[template > 0] = 255 
-        templates[letter] = template
 
+with open('output.json', 'w') as json_file:
+    json.dump({}, json_file)
 
+def load_templates(templates_path):
+    templates = {}
+    for filename in os.listdir(templates_path):
+        if filename.endswith(".png"):
+            letter = filename.split(".")[0]
+            template = cv2.imread(os.path.join(templates_path, filename))
+            template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+            ret, th3 = cv2.threshold(template, 127, 255, cv2.THRESH_BINARY)
+            templates[letter] = th3
+    return templates
 
-while idx < len(filename_list):
-    img = cv2.imread(os.path.join(folder_path, filename_list[idx]))
-    img = cv2.resize(img, (shape_x, shape_y))
+templates = load_templates(templates_path)
 
+def first_mask():
     lower_threshold_b = 109
     upper_threshold_b = 255
     lower_threshold_g = 132
     upper_threshold_g = 255
     lower_threshold_r = 143
     upper_threshold_r = 255
-
-
     r, g, b = cv2.split(img)
-
-
     _, th_b = cv2.threshold(b, lower_threshold_b, upper_threshold_b, cv2.THRESH_BINARY)
     _, th_g = cv2.threshold(g, lower_threshold_g, upper_threshold_g, cv2.THRESH_BINARY)
     _, th_r = cv2.threshold(r, lower_threshold_r, upper_threshold_r, cv2.THRESH_BINARY)
-
-
     combined_mask = cv2.bitwise_or(th_r, cv2.bitwise_or(th_g, th_b))
+    return combined_mask
 
 
-    result_img = cv2.bitwise_and(img, img, mask=combined_mask)
+
+while idx < len(filename_list):
+    final_results = {}
+    img = cv2.imread(os.path.join(folder_path, filename_list[idx]))
+    img = cv2.resize(img, (shape_x, shape_y))
+
+    result_img = cv2.bitwise_and(img, img, mask=first_mask())
 
     gray_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2GRAY)
 
@@ -71,10 +77,8 @@ while idx < len(filename_list):
         if 40000 < area < 200000:
             cv2.drawContours(mask, [contour], 0, (255), thickness=cv2.FILLED)
 
-    # Apply mask to original image
     result = cv2.bitwise_and(img, img, mask=mask)
 
-    # Invert the mask
     result[mask == 0] = [0, 0, 0]
 
     gray_img = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
@@ -94,9 +98,7 @@ while idx < len(filename_list):
         area = cv2.contourArea(contour)
         if 30000 < area:
             x, y, w, h = cv2.boundingRect(contour)
-            # Wyciągnij region zainteresowania (ROI) z obrazu
             roi = img[y-10:y+h+10, x-10:x+w+10]
-            # Przeskaluj ROI do wymiarów 500x300
             scaled_roi = cv2.resize(roi, (1500, 900))
 
     gray_img = cv2.cvtColor(scaled_roi, cv2.COLOR_BGR2GRAY)
@@ -113,19 +115,14 @@ while idx < len(filename_list):
     contours, _ = cv2.findContours(dilated_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     for point in sorted_points_list:
         x, y = point
-        # Dolny narożnik - poszerzanie w dół
         if point == left_bottom or point == right_bottom:
             y += 10
-        # Górny narożnik - poszerzanie w górę
         elif point == left_top or point == right_top:
             y -= 10
-        # Prawy narożnik - poszerzanie w prawo
         if point == right_bottom or point == right_top:
             x += 10
-        # Lewy narożnik - poszerzanie w lewo
         elif point == left_bottom or point == left_top:
             x -= 10
-        # Aktualizacja współrzędnych narożnika
         point[0] = x
         point[1] = y
     max_area = 0
@@ -176,7 +173,7 @@ while idx < len(filename_list):
                     add_di += 1
                     #cv2.circle(scaled_roi, (x, y), 5, (255), -1)
                     points_list.append([x, y])
-            # Posortuj punkty względem współrzędnej x
+
             sorted_points = sorted(points_list, key=lambda point: point[1])
             lowest_x1, lowest_x2 = sorted_points[:2]
             n_x ,n_y = lowest_x2
@@ -202,39 +199,38 @@ while idx < len(filename_list):
             #cv2.circle(scaled_roi, (x, y), 5, (255), -1)
             points_list.append([x, y])
            
-        # Znajdź narożniki: lewy górny, prawy górny, prawy dolny, lewy dolny
+
     left_top = min(points_list, key=lambda x: x[0] + x[1])
     left_bottom = min([point for point in points_list if point not in [left_top]], key=lambda x: x[0] - x[1])
     right_bottom = max(points_list, key=lambda x: x[0] + x[1])
     right_top = max([point for point in points_list if point not in [right_bottom]], key=lambda x: x[0] - x[1])
 
-    # # Utwórz posortowaną listę narożników
+
     sorted_points_list = [left_top, right_top, right_bottom, left_bottom]
 
     for point in sorted_points_list:
         x, y = point
-        # Dolny narożnik - poszerzanie w dół
+
         if point == left_bottom or point == right_bottom:
             y += 10
-        # Górny narożnik - poszerzanie w górę
+
         elif point == left_top or point == right_top:
             y -= 10
-        # Prawy narożnik - poszerzanie w prawo
+
         if point == right_bottom or point == right_top:
             x += 10
-        # Lewy narożnik - poszerzanie w lewo
+
         elif point == left_bottom or point == left_top:
             x -= 10
-        # Aktualizacja współrzędnych narożnika
+
         point[0] = x
         point[1] = y
 
                   
     output_pts = np.float32([[0, 0], [1500, 0], [1500, 850], [0, 850]])   
-    # Oblicz macierz transformacji dla obszaru zainteresowania (ROI)
+
     M = cv2.getPerspectiveTransform(np.float32(sorted_points_list), output_pts)
 
-    # Zastosuj transformację perspektywiczną do obszaru zainteresowania (ROI)
     transformed_roi = cv2.warpPerspective(scaled_roi, M, (scaled_roi.shape[1], scaled_roi.shape[0]), flags=cv2.INTER_LINEAR)
     gray_img = cv2.cvtColor(transformed_roi, cv2.COLOR_BGR2GRAY)
     ret,th3 = cv2.threshold(gray_img,127,255,cv2.THRESH_BINARY)
@@ -245,36 +241,62 @@ while idx < len(filename_list):
 
     edges = cv2.Canny(dilation, 100, 255)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+    rect = []
     for contour in contours:
         area = cv2.contourArea(contour)
         if area > 10000:
             #cv2.drawContours(transformed_roi, [contour], 0, (255), thickness=5)
             x,y,w,h = cv2.boundingRect(contour)
             if h >300:
-                cv2.rectangle(transformed_roi,(x,y),(x+w,y+h),(0,255,0),8)
+                #cv2.rectangle(transformed_roi,(x,y),(x+w,y+h),(0,255,0),8)
+                rect.append([x,y,w,h])
 
+    rect_sorted = sorted(rect, key=lambda r: r[0])
+    tab = []
 
+    for i, (x, y, w, h) in enumerate(rect_sorted):
+        roi = transformed_roi[y:y+h, x:x+w]
+        gray_img = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        ret, th3 = cv2.threshold(gray_img, 127, 255, cv2.THRESH_BINARY)
+        #cv2.imshow(f"Match {i}", th3)
 
+        best_match = None
+        best_score = -1
 
-    # for letter, template in templates.items():
-    #     p1, des1 = sift.detectAndCompute(template, None)
-    #     kp2, des2 = sift.detectAndCompute(transformed_roi, None)
-    #     # img1 = cv2.drawKeypoints(template, kp1, None)
-    #     # img2 = cv2.drawKeypoints(cropped_img_gray, kp2, None)
-    #     bf = cv2.BFMatcher()
-    #     matches = bf.knnMatch(des1, des2, k=2)
+        for letter, template in templates.items():
+            if len(template.shape) == 3:
+                gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+            else:
+                gray_template = template
 
-    #     # Zastosuj próg na dopasowanych punktach
-    #     for m, n in matches:
-    #         if m.distance < 0.96 * n.distance:
-    #             print(f"Znaleziono dopasowanie dla litery {letter} w obrazie {filename_list[idx]}")
+            binary_template = np.where(gray_template > 0, 255, 0).astype(np.uint8)
+            
+            resized_template = cv2.resize(binary_template, (th3.shape[1], th3.shape[0]))
 
+            result = cv2.matchTemplate(th3, resized_template, cv2.TM_CCOEFF)
+            max_score = cv2.minMaxLoc(result)[1]
 
+            if max_score > best_score:
+                best_score = max_score
+                best_match = letter
+
+        #print(f"Najbardziej podobny szablon dla regionu {i}: {best_match}")
+        tab.append(best_match)
+
+    with open('output.json', 'r') as json_file:
+        final_results = json.load(json_file)
+
+    name = filename_list[idx].split('.')[0]
+    result_string = ''.join(tab)
+    print(result_string)
+    final_results[name] = result_string
+
+    with open('output.json', 'w') as json_file:
+            json.dump(final_results, json_file)
 
     # Wyświetl przekształcony obszar w nowym oknie
-    cv2.imshow('Transformed ROI', transformed_roi)
-    cv2.waitKey(0)  
+    #cv2.imshow('Transformed ROI', transformed_roi)
+    #cv2.waitKey(0)  
     # cv2.imshow('result', scaled_roi)
     # cv2.waitKey(0)
 
